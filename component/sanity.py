@@ -17,24 +17,61 @@ def parse_san_loss_formula(formula: str):
     """
     解析 SAN 损失公式，返回成功和失败时的损失表达式。
     例如 "1d6/1d10" -> ("1d6", "1d10")
+    例如 "1d6+1/1d10-1" -> ("1d6+1", "1d10-1")
     """
     parts = formula.split("/")
+    
+    # 成功部分就是分隔符前的部分
     success_part = parts[0]
+    
+    # 如果包含 '/', 则失败部分是 '/' 后的部分
+    # 否则失败部分和成功部分相同
     failure_part = parts[1] if len(parts) > 1 else parts[0]
+    
     return success_part, failure_part
 
 def roll_loss(loss_expr: str):
     """
-    根据损失表达式计算损失值。
-    支持 "XdY" 或纯数字。
+    根据损失表达式计算损失值，并返回计算过程。
+    支持 "XdY" 或纯数字，并支持加法和减法运算。
+    例如： "1d6", "1d6+1", "1d6-2"
     """
-    match = re.fullmatch(r"(\d+)d(\d+)", loss_expr)
+    # 处理加法和减法
+    match = re.fullmatch(r"(\d+)d(\d+)([+-]\d+)?", loss_expr)
     if match:
-        num_dice, dice_size = map(int, match.groups())
-        return sum(random.randint(1, dice_size) for _ in range(num_dice))
+        num_dice, dice_size, modifier = match.groups()
+        num_dice = int(num_dice)
+        dice_size = int(dice_size)
+        modifier = int(modifier) if modifier else 0
+
+        # 计算骰子结果
+        dice_results = [random.randint(1, dice_size) for _ in range(num_dice)]
+        dice_total = sum(dice_results)
+
+        # 总损失计算
+        total_loss = dice_total + modifier
+
+        # 确保损失不会小于0
+        total_loss = max(0, total_loss)
+
+        # 构造计算过程表达式
+        if modifier != 0:
+            # 处理减法时不显示 "+ -"，只显示 "-"
+            if modifier > 0:
+                expr = f"[{dice_total} + {modifier}] = {total_loss}"
+            else:
+                expr = f"[{dice_total} - {-modifier}] = {total_loss}"
+        else:
+            # 没有modifier时，只返回骰子的总和
+            expr = f"{dice_total}"
+
+        # 返回损失值和计算过程
+        return total_loss, expr
+    
+    # 纯数字情况，直接返回
     elif loss_expr.isdigit():
-        return int(loss_expr)
-    return 0
+        loss = int(loss_expr)
+        return max(0, loss), f"{loss}"
 
 def san_check(chara_data: dict, loss_formula: str):
     """
@@ -48,14 +85,16 @@ def san_check(chara_data: dict, loss_formula: str):
     success_loss, failure_loss = parse_san_loss_formula(loss_formula)
 
     if roll_result <= san_value:
-        loss = roll_loss(success_loss)
+        loss, expr = roll_loss(success_loss)
         result_msg = "成功！"
+        succ = True
     else:
-        loss = roll_loss(failure_loss)
+        loss, expr = roll_loss(failure_loss)
         result_msg = "失败..."
+        succ = False
 
     new_san = max(0, san_value - loss)
-    return roll_result, san_value, result_msg, loss, new_san
+    return roll_result, san_value, result_msg, loss, new_san, expr
 
 def get_temporary_insanity(phobias: dict, manias: dict):
     """

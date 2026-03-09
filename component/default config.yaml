@@ -1,0 +1,282 @@
+output:
+  # ---------- 技能判定 ----------
+  skill_check:
+    normal: 
+      head : "进行技能检定：<{name}> 的 【{skill_name}】"
+      detail : "投掷结果：{roll_result}/{skill_value} —— {result}"
+    penalty:
+      head : "进行惩罚骰检定：<{name}> 的 【{skill_name}】"
+      detail : "惩罚骰：{new_tens_digits} → 最终结果：{final_y}/{skill_value} —— {result}"
+    bonus:
+      head : "进行奖励骰检定：<{name}> 的 【{skill_name}】"
+      detail : "奖励骰：{new_tens_digits} → 最终结果：{final_y}/{skill_value} —— {result}"
+
+    pistol_check:
+      head: "<{name}> 使用 【{skill_name}】 进行射击 [{mode}]："
+      detail: "第 {i} 发({p}P)：投掷结果 {roll}{p_info}/{skill_value} —— {result}"
+
+    error:
+      normal: "未在人物卡中找到技能：【{skill_name}】。"
+      penalty: "指令错误：请指定惩罚骰的数量。"
+      bonus: "指令错误：请指定奖励骰的数量。"
+    grow_up:
+      success: "技能成长成功：【{skill_name}】增加 {en_value} 点，当前数值为 {new_value}。"
+      failure: "技能成长失败：【{skill_name}】数值保持 {new_value} 不变。"
+      boost_result: "成长检定：{roll_result} / {skill_value} —— {result}"
+
+  # ---------- 运势 ----------
+  rp:
+    today: "今日运势指数为：{rp}。"
+
+  # ---------- 火球术 ----------
+  fireball:
+    result: |
+      # 火球术检定
+      施法环数：{ring} 环
+      伤害投掷：{breakdown}
+      最终伤害值：🔥 {total} 🔥
+    low: "施法失败：火球术环数不足。"
+
+  # ---------- COC判定 ----------
+  coc_roll:
+    set_rule: "成功。COC检定规则已调整为：「{rule}」。"
+    results:
+      great_success: "大成功"
+      extreme_success: "极难成功"
+      hard_success: "困难成功"
+      success: "成功"
+      great_failure: "大失败"
+      failure: "失败"
+      error: "算式解析错误：{error}"
+      reset: "重置成功。检定规则已恢复为：「{rule}」。"
+
+  # ---------- 人格卡操作 ----------
+  pc:
+    create:
+      duplicate: "创建失败：档案中已存在名为‘<{name}>’的角色。"
+      success: "创建成功：角色‘<{name}>’已登记，编号：{id}。"
+    show:
+      no_active: "未绑定角色。请先使用 .pc tag <名字|序号> 绑定人物卡。"
+      load_fail: "读取失败：未找到编号为 {id} 的档案。"
+      attr_missing: "属性缺失：当前卡片未找到‘{attribute}’字段。"
+      attr: "查询结果：【{attr}】数值为 {value}。"
+      all: "角色 <{name}> 完整属性列表：\n{attributes}"
+      none_above : "查询结果：未找到高于 【{num}】 的数值。"
+      above : "查询结果：数值高于 【{num}】 的属性如下："
+    list:
+      empty: "记录为空：当前尚未保存任何角色档案。"
+      result: "当前已保存的角色列表：\n{list}"
+    change:
+      missing: "切换失败：未找到名为 <{name}> 的角色。"
+      success: "切换成功：当前活动角色已变更为 <{name}>。"
+    update:
+      no_active: "操作失败：当前未绑定任何角色。"
+      error_format: "格式错误：请使用‘属性+数值’或‘属性 数值’格式。"
+      success: "更新成功：【{attr}】已由 {old} 变更至 {new}。"
+      batch_success: "批量更新成功：已完成 {count} 项属性修改。"
+      attr_missing: "更新失败：未在卡面上找到属性 【{attr}】。"
+    delete:
+      fail: "删除失败：未找到名为‘<{name}>’的角色档案。"
+      success: "删除成功：角色‘<{name}>’的档案已从数据库移除。"
+    grow:
+      no_active : "操作失败：请先绑定角色再进行成长检定。"
+      success: "成长检定成功：【{skill_name}】增加 {en_value} 点，当前数值为 {new_value}。"
+      failure: "成长检定失败：【{skill_name}】没有变化。"
+      boost_result: "成长检定详情：{roll_result} / {skill_value} —— {result}"
+    export :
+      success: "角色 <{name}> 录入表达式导出：\n{data}"
+    uni :
+      no_pc : "同步中心：未发现关联的角色档案。"
+      success: |
+        已发现全域角色档案：
+        {msg}
+        提示：使用 .pc pull <序号> 可将其同步至本地。
+    push :
+      no_pc : "上传失败：当前未绑定角色。"
+      success : "上传成功：本地数据已同步至全域档案。"
+      fail : "上传失败：云端连接异常。"
+    pull :
+      no_pc : "同步失败：未在档案库中找到该角色。"
+      exist : "提示：该角色已在当前群组活动中，可直接使用 .pc tag 切换。"
+      success : "同步成功：已拉取全域档案 <{name}> 并绑定。"
+      sync : "同步更新：已完成 <{name}> 的版本同步。"
+      fail : "同步失败：文件写入异常。"
+
+  st :
+    del :
+      success : "已删除属性：【{attr}】。"
+      not_found: "删除失败：未找到属性 【{attr}】。"
+      protected: "权限拒绝：【{attr}】属于核心保护属性，不可删除。"
+    clr :
+      success: "重置成功：角色 <{name}> 的非核心属性已全部清空。"
+      nothing: "重置结束：该角色当前没有可清除的额外属性。"
+
+  # ---------- 群昵称 ----------
+  nick:
+    platform_unsupported: "操作失败：当前平台协议不支持修改群名片。"
+    no_character: "操作失败：未找到编号为 {id} 的角色卡，无法生成名片。"
+    success: "修改成功：群名片已根据角色数据自动更新。"
+
+  # ---------- 掷骰 ----------
+  dice:
+    normal:
+      success: |
+        检定结果：<{name}> 
+        结果：{result}
+      success_remark : |
+        项目：<{name}> 的 【{remark}】
+        结果：{result}
+      error: "掷骰系统错误：{error}"
+    vampire:
+      success: "吸血鬼规则检定：<{name}> 的结果为 {result}"
+      error: "规则解析错误：{error}"
+    hidden:
+      success: "暗骰结果：{result}。该结果已通过私聊发送。"
+      error: "私聊发送失败：请检查是否已添加机器人为好友。错误：{error}"
+      group: "进行了一次暗骰，结果仅发起者可见。"
+    detail: "出目详情：{detail}"
+    expression_error: "算式错误：{error}"
+
+  # ---------- SAN 理智 ----------
+  san:
+    check_result:
+      loss : |
+        理智检定：<{name}>
+        详情：{roll_result}/{san_value}，{result_msg}
+        理智值扣除：{expr}
+        剩余理智：{new_san}
+      no_loss : |
+        理智检定：<{name}>
+        详情：{roll_result}/{san_value}，{result_msg}
+        理智值未变动（扣除 {expr} 点）。
+      great_loss : |
+        理智检定：<{name}>
+        详情：{roll_result}/{san_value}，{result_msg}
+        扣除 {expr} 点理智。当前理智：{new_san}。触发大成功/大失败或大幅度扣除，请进行 .ti 检定。
+      zero : |
+        理智检定：<{name}>
+        详情：{roll_result}/{san_value}，{result_msg}
+        理智已归零。
+      
+    temporary_insanity: |
+      角色 {name} 陷入临时疯狂。
+      症状详情：
+      {result}
+    long_term_insanity: |
+      角色 {name} 陷入不定性疯狂。
+      症状总结：
+      {result}
+
+  # ---------- 先攻 ----------
+  initiative:
+    add: "已加入先攻序列：<{name}>，先攻值：{value}。"
+    remove_name: "已将 <{name}> 从先攻序列移除。"
+    clear: "先攻序列已清空。"
+    empty: "先攻序列当前为空。"
+    list: "当前先攻列表：\n{content}"
+    next_turn: "下一回合：轮到 <{name}> (先攻值: {value})。"
+
+  # ---------- 角色生成模板 ----------
+  character_list:
+    coc: |
+      已生成 COC 角色属性：
+      {characters}
+    dnd: |
+      已生成 DnD 角色属性：
+      {characters}
+      
+  # ---------- 名字生成 ----------
+  generated_names: "已生成随机名字（{num}个）：{names}。"
+
+  # ---------- log 相关指令 ----------#
+
+  log:
+    no_active_session: "当前没有正在进行的日志记录。"
+    message_added: "消息已记录。"
+    unfinished_session: "冲突：日志『{session_name}』尚未结束。请先结束或切换。"
+    new_session: "日志启动成功。标题：『{session_name}』。"
+    session_not_found: "错误：未找到名为『{session_name}』的日志。"
+    session_finished: "日志『{session_name}』已结束并存档。"
+    session_active: "提示：日志『{session_name}』已在运行中。"
+    session_resumed: "日志继续：已恢复『{session_name}』的记录。"
+    no_paused_session: "提示：当前没有处于暂停状态的日志。"
+    session_paused: "日志暂停：『{session_name}』已停止记录。"
+    no_unfinished_session: "提示：当前没有未完成的日志记录。"
+    session_halted: "已强行终止日志『{session_name}』的记录。"
+    session_line: "· {session_name} | {start_time} | {status} | 记录数：{message_count}"
+    no_sessions: "本地数据库中没有日志记录。"
+    already_active_session : "操作拒绝：日志『{prev}』正在运行中，无法同时开启多个记录。"
+    session_deleted: "已删除日志档案：『{session_name}』。"
+    session_exported: "导出成功：『{file_name}』已生成。预览地址：{result_website}"
+    delete_error : "指令错误：请使用 .log del <日志名>。"
+
+  help :
+    pc : |
+      《角色档案管理帮助》
+      .pc new <角色名> : 创建新角色并自动绑定到当前会话。
+      .pc tag [<名|序号>] ：绑定指定角色为当前活动角色。
+      .pc tag : 解除当前角色的绑定。
+      .pc list : 显示本地存储的所有角色列表。
+      .pc rename <新名字> : 修改当前活动角色的名字。
+      .pc del <名|序号> : 永久删除指定的角色档案。
+      .pc push : 将当前角色档案同步至全域云端。
+      .pc fetch : 获取云端关联的所有角色列表。
+      .pc pull <序号> : 从全域云端同步指定档案到本地。
+      
+    st : |
+      《属性管理帮助》
+      .st <属性><数值> : 直接设定属性值。
+      .st <属性><+|-><数值> : 增减属性值。
+      .st <属性><算式> : 根据投掷结果设定属性。
+      .st <录入表达式>：批量录入人物卡属性。
+      .st show : 显示当前角色的所有属性。
+      .st show <属性名> : 查询单项属性数值。
+      .st show <数字> : 显示数值大于该数字的所有属性。
+      .st del <属性名> : 删除指定的非核心属性。
+      .st clr : 清空该角色的所有非核心属性。
+      .st export : 导出该角色的录入表达式。
+    dice : |
+      《检定帮助》
+      .r <算式> : 普通掷骰。
+      .ra <技能> [数值] : 技能检定。
+      .rab [N] <技能> : 奖励骰检定（N个奖励骰）。
+      .rap [N] <技能> : 惩罚骰检定（N个惩罚骰）。
+      .sc <成功>/<失败> : 理智检定（San Check）。
+      .ti / .li : 抽取临时/长期疯狂症状。
+      .en <技能> : 技能成长判定。
+      .rh <算式> : 暗骰检定。
+    expr : |
+      《进阶表达式》
+      .r 1d6+5 / 2d6*3 : 支持基础四则运算。
+      .r N#1d10 : 重复执行 N 次掷骰。
+      .ra <次数>#b<技能名>。如：.ra3#b2射击50，三个射击检定，每一个射击检定都有两个奖励骰
+      .ra <次数>#p<技能名>。如：.ra3#p2射击50，三个射击检定，每一个射击检定都有两个惩罚骰
+      .r NdMkL : 投掷 N 个 M 面骰，保留最大的 L 个。
+    log : |
+      《日志管理帮助》
+      .log new <名> : 开启新的记录会话。
+      .log end : 结束并导出当前会话。
+      .log on [名] : 恢复指定会话的记录。
+      .log off : 暂停当前会话记录。
+      .log list : 列出本地会话存档。
+      .log get <名> : 获取指定日志的导出链接。
+      .log del <名> : 删除指定的会话档案。
+
+    coc : |
+      《COC专用指令》
+      .setcoc : 显示当前房规设定。
+      .coc [N] : 随机生成 N 组角色属性。
+      .name <地区代码> : 生成随机姓名（cn/en/us/jp）。
+      .fire : 三连射
+
+    dnd : |
+      《DnD/战斗用指令》
+      .dnd [N] : 随机生成 N 组 DnD 角色属性。
+      .init : 显示当前先攻列表。
+      .ri +/- X : 投掷带修正值的先攻。
+      .ed : 结束当前行动回合。
+      .fireball [环数] : 计算火球术伤害。
+
+  # 后端网址
+  setting : 
+    website : https://painter.velinithra.space

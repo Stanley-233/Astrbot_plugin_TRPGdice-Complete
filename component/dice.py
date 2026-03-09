@@ -30,42 +30,62 @@ def roll_coc_bonus_penalty(base_roll, bonus_dice=0, penalty_dice=0):
         return max([base_roll] + alternatives)
     return base_roll
 
+import re
+import random
+
 def parse_dice_expression(expression):
     """
-    解析骰子表达式，并格式化输出。
+    解析骰子表达式，并格式化输出 (V3 - PEMDAS 运算优先级和清晰的汇总格式)。
     支持普通骰、奖励/惩罚骰、吸血鬼骰等。
     返回 (总和, 格式化字符串)
     """
+    expression_original = expression # 保留原始表达式用于显示
     expression = expression.replace("x", "*").replace("X", "*")
 
-    match_repeat = re.match(r"(\d+)?#(.+)", expression) # Match 3#2d20
+    match_repeat = re.match(r"(\d+)?#(.+)", expression)
     roll_times = 1
     bonus_dice = 0
     penalty_dice = 0
 
-    if match_repeat:    # Matched: roll group(2) for group(1) times
+    if match_repeat:
         roll_times = int(match_repeat.group(1)) if match_repeat.group(1) else 1
         expression = match_repeat.group(2)
+        expression_original = expression # 重复掷骰时，只显示单次表达式
 
         if expression in ["p", "b"]:
-            penalty_dice = 1 if expression == "p" else 0
-            bonus_dice = 1 if expression == "b" else 0
+            penalty_dice = roll_times if expression == "p" else 0
+            bonus_dice = roll_times if expression == "b" else 0
             expression = "1d100"
+            expression_original = f"{roll_times}{expression}" # e.g. "3b"
+            roll_times = 1
 
-    results = []
-    total = None
+    final_results_list = []
+    final_total = None # 存储最后一次掷骰的总和
+
     for _ in range(roll_times):
         parts = re.split(r"([+\-*])", expression)
-        subtotal = None
-        formatted_parts = []
+        
+        # --- Pass 1: 解析与掷骰 ---
+        # 我们需要两个列表：
+        # 1. terms_values: 存储每个项的[数值], e.g. [31, 5, 15, 3]
+        # 2. terms_strings: 存储每个项的[字符串详情], e.g. ["[4+..+5]", "5", "[4+5+6]", "3"]
+        terms_values = []
+        terms_strings = []
+        operators = []
+        is_vampire_roll = False
 
         for i in range(0, len(parts), 2):
             expr = parts[i].strip()
-            operator = parts[i - 1] if i > 0 else "+"
+            
+            if i > 0:
+                operators.append(parts[i-1].strip()) # 存储运算符
+
+            subtotal = None
+            roll_str_detail = ""
 
             if expr.isdigit():
                 subtotal = int(expr)
-                roll_result = f"{subtotal}"
+                roll_str_detail = str(subtotal)
             else:
                 match = re.match(r"(\d*)d(\d+)(k\d+)?([+\-*]\d+)?(v(\d+)?)?", expr)
                 if not match:
@@ -82,19 +102,24 @@ def parse_dice_expression(expression):
 
                 # COC 奖励/惩罚骰
                 if dice_count == 1 and dice_faces == 100 and (bonus_dice > 0 or penalty_dice > 0):
-                    base_tens = random.randint(0, 9)
                     unit = random.randint(0, 9)
-                    rolls = [random.randint(0, 9) for _ in range(1 + max(bonus_dice, penalty_dice))]
+                    num_tens_dice = 1 + max(bonus_dice, penalty_dice)
+                    rolls = [random.randint(0, 9) for _ in range(num_tens_dice)]
+                    
                     if bonus_dice > 0:
-                        final_tens = min(rolls[:1 + bonus_dice])
-                        roll_type = "奖励骰"
-                    else:
-                        final_tens = max(rolls[:1 + penalty_dice])
-                        roll_type = "惩罚骰"
+                        final_tens = min(rolls)
+                    else: # penalty_dice > 0
+                        final_tens = max(rolls)
+                        
                     subtotal = final_tens * 10 + unit
-                    roll_result = f"{expr} = [D100: {base_tens * 10 + unit}, {roll_type}: {', '.join(map(str, rolls))}] → {subtotal}"
+                    if subtotal == 0: subtotal = 100 # COC 规则 00 = 100
+                    
+                    roll_type = f"{bonus_dice}B" if bonus_dice > 0 else f"{penalty_dice}P"
+                    roll_str_detail = f"[({roll_type}) 十:{','.join(map(str, rolls))} 个:{unit} -> {subtotal}]"
 
+                # 吸血鬼骰
                 elif vampire_difficulty:
+                    is_vampire_roll = True
                     rolls = [random.randint(1, dice_faces) for _ in range(dice_count)]
                     sorted_rolls = sorted(rolls, reverse=True)
                     success_num = 0
@@ -112,156 +137,221 @@ def parse_dice_expression(expression):
                     if failure_flag and not success_flag:
                         super_failure = True
 
-                    roll_result = f"难度为{vampire_difficulty}的{dice_count}次掷骰 = [{', '.join(map(str, sorted_rolls))}]"
+                    roll_str_detail = f"[{','.join(map(str, sorted_rolls))}] 难度{vampire_difficulty}"
                     if success_num > 0:
-                        roll_result += f"，成功！成功数为{success_num}"
+                        roll_str_detail += f" = 成功数 {success_num}"
                     elif super_failure:
-                        roll_result += "，大失败！"
+                        roll_str_detail += " = 大失败！"
                     else:
-                        roll_result += "，失败！"
-                    subtotal = None  # 吸血鬼骰不返回总和
-
+                        roll_str_detail += " = 失败"
+                    
+                    # 吸血鬼骰没有总和，直接结束本次循环的构建
+                    final_results_list.append(f"{expression_original} = {roll_str_detail}")
+                    break # 跳出 for i in range... 循环
+                
+                # 普通骰
                 else:
-                    # 普通骰子
                     rolls = [random.randint(1, dice_faces) for _ in range(dice_count)]
                     sorted_rolls = sorted(rolls, reverse=True)
                     selected_rolls = sorted_rolls[:keep_highest]
                     subtotal_before_mod = sum(selected_rolls)
 
+                    roll_str_detail = f"[{' + '.join(map(str, selected_rolls))}]"
+                    
                     if keep_highest < dice_count:
-                        kept = " ".join(map(str, sorted_rolls[:keep_highest]))
+                        # 如果有k，在详情中也显示被丢弃的
                         dropped = " ".join(map(str, sorted_rolls[keep_highest:]))
-                        roll_result = f"{dice_count}d{dice_faces}k{keep_highest}={subtotal_before_mod} [{kept} | {dropped}]"
-                    else:
-                        roll_result = f"{dice_count}d{dice_faces}={subtotal_before_mod} [{' + '.join(map(str, rolls))}]"
+                        roll_str_detail = f"[{' + '.join(map(str, selected_rolls))} | 丢弃: {dropped}]"
 
                     if modifier:
                         try:
                             subtotal = eval(f"{subtotal_before_mod}{modifier}")
-                            roll_result = f"{dice_count}d{dice_faces}{modifier}={subtotal_before_mod} [{' + '.join(map(str, rolls))}] {modifier} = {subtotal}"
+                            roll_str_detail = f"({roll_str_detail}{modifier})" # e.g. "([1+2+3]+5)"
                         except:
                             return None, f"⚠️ 修正值 `{modifier}` 无效！"
                     else:
                         subtotal = subtotal_before_mod
 
-            # 计算表达式
-            if not vampire_difficulty:
-                if total is None:
-                    total = subtotal
-                else:
-                    if operator == "+":
-                        total += subtotal
-                    elif operator == "-":
-                        total -= subtotal
-                    elif operator == "*":
-                        total *= subtotal
+            if is_vampire_roll:
+                break # 已经处理过吸血鬼骰，跳出
+                
+            terms_values.append(subtotal)
+            terms_strings.append(roll_str_detail)
+        
+        # 如果是吸血鬼骰，跳过后续所有计算
+        if is_vampire_roll:
+            final_total = None
+            continue #
+            
+        # --- Pass 2: 构建掷骰详情行 (Summary Line 1) ---
+        summary_line_1 = f"{terms_strings[0]}"
+        for i, op in enumerate(operators):
+            summary_line_1 += f" {op} {terms_strings[i+1]}"
 
-            # 存储格式化骰子结果
-            if i == 0:
-                formatted_parts.append(f"{roll_result}")
+        # --- Pass 3: 计算乘法 (隐藏) ---
+        values_pass_3 = list(terms_values)
+        ops_pass_3 = list(operators)
+        
+        i = 0
+        while i < len(ops_pass_3):
+            if ops_pass_3[i] == "*":
+                v1 = values_pass_3.pop(i)
+                v2 = values_pass_3.pop(i)
+                values_pass_3.insert(i, v1 * v2)
+                ops_pass_3.pop(i)
             else:
-                formatted_parts.append(f"{operator} {roll_result}")
+                i += 1
+        
+        # --- Pass 4: 计算加减并构建总和行 (Summary Line 3) ---
+        total_pass_4 = values_pass_3[0]
+        for i, op in enumerate(ops_pass_3):
+            if op == "+":
+                total_pass_4 += values_pass_3[i+1]
+            elif op == "-":
+                total_pass_4 -= values_pass_3[i+1]
+        
+        summary_line_3 = str(total_pass_4)
+        final_total = total_pass_4 # 存储总和
 
-        # 最终格式化输出
-        if not vampire_difficulty:
-            final_result = f"{'  '.join(formatted_parts)} = {total}"
-            results.append(f"{final_result}")
-        else:
-            final_result = f"{'  '.join(formatted_parts)}"
-            results.append(f"{final_result}")
+        # --- ！！！修改点 2: 组合最终输出 ---
+        # 完全替换掉 V3 的 if/elif/else 块
+        # 只输出 "过程 = 结果"
+        final_results_list.append(f"{summary_line_1} = {summary_line_3}")
+    return final_total, "\n".join(final_results_list)
 
-    return total, "\n".join(results)
-
-def roll_attribute(skill_name, skill_value, group_id, name):
+def roll_attribute(roll_times, skill_name, skill_value, group_id, name):
     """
-    普通技能判定
+    普通技能判定 (支持多次, 适配 head/detail)
     """
     try:
+        roll_times = int(roll_times)
         skill_value = int(skill_value)
     except ValueError:
         return get_output("skill_check.error.normal", skill_name=skill_name)
 
-    tens_digit = random.randint(0, 9)
-    ones_digit = random.randint(0, 9)
-    roll_result = 100 if (tens_digit == 0 and ones_digit == 0) else (tens_digit * 10 + ones_digit)
-
-    # 这里建议 get_roll_result 也迁移到 dice.py 或 rules.py
-    result = get_roll_result(roll_result, skill_value, str(group_id))
-
-    return get_output(
-        "skill_check.normal",
+    # 1. 打印一次头部
+    head_str = get_output(
+        "skill_check.normal.head",
         skill_name=skill_name,
-        roll_result=roll_result,
-        skill_value=skill_value,
-        result=result,
-        name = name
+        name=name
     )
+    
+    results_list = [head_str] # 用头部初始化列表
 
-def roll_attribute_penalty(dice_count, skill_name, skill_value, group_id, name):
+    # 2. 循环 N 次, 仅生成 detail
+    for _ in range(roll_times):
+        tens_digit = random.randint(0, 9)
+        ones_digit = random.randint(0, 9)
+        roll_result = 100 if (tens_digit == 0 and ones_digit == 0) else (tens_digit * 10 + ones_digit)
+
+        result = get_roll_result(roll_result, skill_value, str(group_id))
+
+        detail_str = get_output(
+            "skill_check.normal.detail",
+            roll_result=roll_result,
+            skill_value=skill_value,
+            result=result
+        )
+        results_list.append(detail_str)
+        
+    return "".join(results_list) # 返回 "head\ndetail\ndetail..."
+
+def roll_attribute_penalty(roll_times, dice_count, skill_name, skill_value, group_id, name):
     """
-    技能判定（惩罚骰）
+    技能判定（惩罚骰）(支持多次, 适配 head/detail)
     """
     try:
+        roll_times = int(roll_times)
         dice_count = int(dice_count)
         skill_value = int(skill_value)
     except ValueError:
         return get_output("skill_check.error.penalty", skill_name=skill_name)
 
-    ones_digit = random.randint(0, 9)
-    new_tens_digits = [random.randint(0, 9) for _ in range(dice_count)]
-    new_tens_digits.append(random.randint(0, 9))
-
-    if 0 in new_tens_digits and ones_digit == 0:
-        final_y = 100
-    else:
-        final_tens = max(new_tens_digits)
-        final_y = final_tens * 10 + ones_digit
-
-    result = get_roll_result(final_y, skill_value, str(group_id))
-
-    return get_output(
-        "skill_check.penalty",
+    # 1. 打印一次头部
+    head_str = get_output(
+        "skill_check.penalty.head",
         skill_name=skill_name,
-        new_tens_digits=new_tens_digits,
-        final_y=final_y,
-        skill_value=skill_value,
-        result=result,
-        name = name
+        name=name
     )
+    
+    results_list = [head_str] # 用头部初始化列表
 
-def roll_attribute_bonus(dice_count, skill_name, skill_value, group_id, name):
+    # 2. 循环 N 次, 仅生成 detail
+    for _ in range(roll_times):
+        ones_digit = random.randint(0, 9)
+        new_tens_digits = [random.randint(0, 9) for _ in range(dice_count)]
+        new_tens_digits.append(random.randint(0, 9))
+
+        if 0 in new_tens_digits and ones_digit == 0:
+            final_y = 100
+        else:
+            final_tens = max(new_tens_digits)
+            final_y = final_tens * 10 + ones_digit
+
+        result = get_roll_result(final_y, skill_value, str(group_id))
+
+        detail_str = get_output(
+            "skill_check.penalty.detail",
+            new_tens_digits=new_tens_digits,
+            final_y=final_y,
+            skill_value=skill_value,
+            result=result
+        )
+        results_list.append(detail_str)
+        
+    return "".join(results_list)
+
+def roll_attribute_bonus(roll_times, dice_count, skill_name, skill_value, group_id, name):
     """
-    技能判定（奖励骰）
+    技能判定（奖励骰）(支持多次, 适配 head/detail)
     """
     try:
+        roll_times = int(roll_times)
         dice_count = int(dice_count)
         skill_value = int(skill_value)
     except ValueError:
         return get_output("skill_check.error.bonus", skill_name=skill_name)
 
-    ones_digit = random.randint(0, 9)
-    new_tens_digits = [random.randint(0, 9) for _ in range(dice_count)]
-    new_tens_digits.append(random.randint(0, 9))
-
-    filtered_tens = [tens for tens in new_tens_digits if not (tens == 0 and ones_digit == 0)]
-    if not filtered_tens:
-        final_tens = 0
-    else:
-        final_tens = min(filtered_tens)
-
-    final_y = final_tens * 10 + ones_digit
-
-    result = get_roll_result(final_y, skill_value, str(group_id))
-
-    return get_output(
-        "skill_check.bonus",
+    # 1. 打印一次头部
+    head_str = get_output(
+        "skill_check.bonus.head",
         skill_name=skill_name,
-        new_tens_digits=new_tens_digits,
-        final_y=final_y,
-        skill_value=skill_value,
-        result=result,
-        name = name
+        name=name
     )
+    
+    results_list = [head_str] # 用头部初始化列表
+
+    # 2. 循环 N 次, 仅生成 detail
+    for _ in range(roll_times):
+        ones_digit = random.randint(0, 9)
+        new_tens_digits = [random.randint(0, 9) for _ in range(dice_count)]
+        new_tens_digits.append(random.randint(0, 9))
+
+        filtered_tens = [tens for tens in new_tens_digits if not (tens == 0 and ones_digit == 0)]
+        if not filtered_tens:
+            final_tens = 0
+        else:
+            final_tens = min(filtered_tens)
+
+        final_y = final_tens * 10 + ones_digit
+
+        # --- BUG 修复：确保 00 = 100 ---
+        if final_y == 0:
+            final_y = 100
+        # --- 修复结束 ---
+
+        result = get_roll_result(final_y, skill_value, str(group_id))
+
+        detail_str = get_output(
+            "skill_check.bonus.detail",
+            new_tens_digits=new_tens_digits,
+            final_y=final_y,
+            skill_value=skill_value,
+            result=result
+        )
+        results_list.append(detail_str)
+        
+    return "".join(results_list)
 
 def handle_roll_dice(expression: str, user_id: str = None, name : str = None, remark = None):
     """
@@ -272,7 +362,7 @@ def handle_roll_dice(expression: str, user_id: str = None, name : str = None, re
     if total is None:
         return get_output("dice.normal.error", error=result_message)
     else:
-        if remark is None :
+        if not remark :
             return get_output("dice.normal.success", result=result_message, total=total, name = name)
         else :
             return get_output("dice.normal.success_remark", result=result_message, total=total, name = name, remark = remark)
@@ -350,3 +440,78 @@ def roll_RP(user_id: str):
     rp = int(hash, 16) % 100 + 1
     return get_output("rp.today", rp=rp)
 
+
+def handle_pistol_fire(full_args: str, name: str, chara_data: dict = None) -> str:
+    """
+    手枪三连发后端逻辑 - 适配感性语词模板
+    """
+    # 1. 解析模式与惩罚规律
+    penalty_pattern = [0, 0, 0]
+    mode_label = "常规连射"
+    if 'p2' in full_args:
+        penalty_pattern = [0, 1, 2]
+        mode_label = "后坐力递增"
+    else :
+        penalty_pattern = [1, 1, 1]
+        mode_label = "精度下降"
+
+    # 2. 确定技能值与名称
+    skill_val_match = re.search(r'(?<!p)(\d{2,3})', full_args)
+    if skill_val_match:
+        skill_value = int(skill_val_match.group(1))
+        skill_name = "手枪(指定)"
+    elif chara_data:
+        attrs = chara_data.get("attributes", {})
+        # 依次查找：手枪、射击(手枪)、射击
+        skill_value = attrs.get("手枪", attrs.get("射击(手枪)", attrs.get("射击", 20)))
+        skill_name = "手枪"
+    else:
+        skill_value = 20
+        skill_name = "手枪"
+
+    # 3. 生成头部 (Head)
+    head_str = get_output(
+        "skill_check.pistol_check.head", 
+        name=name, 
+        skill_name=skill_name, 
+        mode=mode_label
+    )
+    results_list = [head_str]
+
+    # 4. 生成每一发的结果 (Detail)
+    for i, p_count in enumerate(penalty_pattern):
+        # 基础 1D100
+        tens = random.randint(0, 9)
+        ones = random.randint(0, 9)
+        base_roll = 100 if (tens == 0 and ones == 0) else (tens * 10 + ones)
+        
+        final_roll = base_roll
+        p_info = ""
+
+        # 惩罚骰逻辑：十位取最高
+        if p_count > 0:
+            original_tens = tens if base_roll != 100 else 0
+            p_tens_list = [random.randint(0, 9) for _ in range(p_count)]
+            final_tens = max([original_tens] + p_tens_list)
+            
+            # 重新组合结果
+            final_roll = 100 if (final_tens == 0 and ones == 0) else (final_tens * 10 + ones)
+            p_info = f"[{tens}, {', '.join(map(str, p_tens_list))}]"
+
+        # 判定成功等级 (调用你之前的 get_roll_result)
+        # 这里的 group_id 传入空字符串或当前群ID
+        result_level = get_roll_result(final_roll, skill_value, "")
+
+        # 拼接详情
+        detail_str = get_output(
+            "skill_check.pistol_check.detail",
+            i=i+1,
+            p=p_count,
+            roll=final_roll,
+            p_info=p_info,
+            skill_value=skill_value,
+            result=result_level
+        )
+        results_list.append(detail_str)
+
+    return "".join(results_list)

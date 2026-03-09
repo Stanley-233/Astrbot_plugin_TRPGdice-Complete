@@ -44,7 +44,8 @@
                       </template>
                       <ul class="nav-children">
                         <li><button class="nav-item" @click="exportRecordRaw">下载原始文件</button></li>
-                        <li><button class="nav-item" @click="exportPreviewToWord">下载 Word</button></li>
+                        <li><button class="nav-item" @click="exportRecordDOC">下载 Word</button></li>
+                        <li><button class="nav-item" @click="exportRecordTalkDOC">下载对话 Word</button></li>
                       </ul>
                     </n-collapse-item>
 
@@ -60,8 +61,19 @@
                         </div>
 
                         <div class="op-row">
+                          <span class="op-label">论坛代码</span>
+                          <n-switch
+                            v-model:value="isShowPreviewBBS"
+                            @update:value="(val) => { isShowPreviewBBS = val; previewClick('bbs') }"
+                          />
+                        </div>
+
+                        <div class="op-row">
                           <span class="op-label">回声工坊</span>
-                          <n-switch v-model:value="isShowPreviewTRG" />
+                          <n-switch
+                            v-model:value="isShowPreviewTRG"
+                            @update:value="(val) => { isShowPreviewTRG = val; previewClick('trg') }"
+                          />
                         </div>
 
                         <div class="op-row">
@@ -89,23 +101,23 @@
                         <!-- 新增过滤选项 -->
                         <div class="op-row">
                           <span class="op-label">过滤表情图片</span>
-                          <n-switch v-model:value="previewFilters.filterEmojis" />
+                          <n-switch v-model:value="filters.image" />
                         </div>
                         <div class="op-row">
                           <span class="op-label">过滤场外发言</span>
-                          <n-switch v-model:value="previewFilters.filterOffTopic" />
+                          <n-switch v-model:value="filters.comment" />
                         </div>
                         <div class="op-row">
                           <span class="op-label">过滤具体时间</span>
-                          <n-switch v-model:value="previewFilters.filterSpecificTime" />
+                          <n-switch v-model:value="filters.time" />
                         </div>
                         <div class="op-row">
                           <span class="op-label">过滤年月日</span>
-                          <n-switch v-model:value="previewFilters.filterDate" />
+                          <n-switch v-model:value="filters.date" />
                         </div>
                         <div class="op-row">
                           <span class="op-label">过滤账号</span>
-                          <n-switch v-model:value="previewFilters.filterAccount" />
+                          <n-switch v-model:value="filters.account" />
                         </div>
                       </div>
                     </n-collapse-item>
@@ -158,6 +170,23 @@
                             </div>
 
                             <div class="role-field">
+                              <span class="label">身份</span>
+                              <div class="field-body">
+                                <n-select
+                                  v-model:value="pc.role"
+                                  size="small"
+                                  style="width: 132px"
+                                  :options="[
+                                    { value: '主持人', label: '主持人' },
+                                    { value: '角色',   label: '角色'   },
+                                    { value: '骰子',   label: '骰子'   },
+                                    { value: '隐藏',   label: '隐藏'   }
+                                  ]"
+                                />
+                              </div>
+                            </div>
+
+                            <div class="role-field">
                               <span class="label">颜色</span>
                               <div class="field-body">
                                 <ColorDot
@@ -196,7 +225,7 @@
                   :show-line-numbers="true"
                   :line-wrapping="true"
                   :extra-extensions="cmExtensions"
-                  :preview="isShowPreview || isShowPreviewTRG"
+                  :preview="isShowPreview"
                 />
                 <preview-main v-if="isShowPreview" :key="'pm:'+previewColorSig" :is-show="true" :preview-items="previewItems" />
                 <preview-bbs v-if="isShowPreviewBBS" :key="'bbs:'+previewColorSig" :is-show="true" :preview-items="previewItems" />
@@ -276,6 +305,7 @@ const filters = reactive({
 })
 
 import { darkTheme, type GlobalThemeOverrides } from 'naive-ui'
+import { Sun, Moon, Download, Document } from '@vicons/carbon' // 图标
 
 /* --- Vue / 基础 --- */
 import { nextTick, onMounted, reactive, onBeforeUnmount, watch, h, render, computed } from 'vue'
@@ -317,10 +347,6 @@ import {
   msgAtFormat
 } from '../utils'
 
-import { Document, Packer, Paragraph, TextRun } from 'docx'
-import { saveAs } from 'file-saver'
-
-
 import axios from 'axios'
 
 import { NButton, NText, useMessage, useModal } from 'naive-ui'
@@ -358,12 +384,10 @@ const nameDraft = reactive<Record<string, string>>({})
 
 const cmContent = computed({
   get() {
-    if(isShowPreview.value) return getPreviewText().map(i => i.line).join('\n')
-    if(isShowPreviewTRG.value) return getPreviewSimpleText().map(i => i.line).join('\n')
-    return text.value
+    return isShowPreview.value ? getPreviewText().map(i => i.line).join('\n') : text.value
   },
   set(val: string) {
-    if (!isShowPreview.value && !isShowPreviewTRG.value) text.value = val
+    if (!isShowPreview.value) text.value = val
   }
 })
 
@@ -388,14 +412,6 @@ const roleOptions = [
   { value: '隐藏',   label: '隐藏' }
 ]
 
-const previewFilters = reactive({
-  filterEmojis: false,       // 过滤表情图片
-  filterOffTopic: false,     // 过滤场外发言
-  filterSpecificTime: false, // 过滤具体时间
-  filterDate: false,         // 过滤年月日
-  filterAccount: false       // 过滤账号（UIN）
-})
-
 // 需要的导入
 
 // ===== 1) 绑定编辑器文本，用它做“实时解析”的来源 =====
@@ -413,10 +429,6 @@ let isFlushing = false
 
 watch(isShowPreview, (val) => {
   previewClick('preview')
-})
-
-watch(isShowPreviewTRG, (val) => {
-  previewClick('trg')
 })
 
 function safeDoFlush() {
@@ -480,14 +492,7 @@ const cmExtensions = computed(() => {
       previewHighlightExtension(lines, store), // 传数组，不是函数
       EditorView.editable.of(false)
     ]
-  } else if (isShowPreviewTRG.value) {
-    const lines = getPreviewSimpleText()
-    return [
-      previewHighlightExtension(lines, store), // 传数组，不是函数
-      EditorView.editable.of(false)
-    ]
-  }
-  else{
+  } else {
     return [
       dyeExtension(store),
       EditorView.editable.of(true)
@@ -743,23 +748,11 @@ function parseNameIdFromLine(s: string) {
   return { name: '未知', IMUserId: '' }
 }
 
-let usedColorIndices: number[] = [];
-const TOTAL_COLORS = 24;
-
 function randomColor(): string {
-  if (usedColorIndices.length >= TOTAL_COLORS) {
-    usedColorIndices = [];
-  }
   // 返回一个亮度适中的随机颜色
-  const available = Array.from({ length: TOTAL_COLORS }, (_, i) => i).filter(
-    i => !usedColorIndices.includes(i)
-  );
-  const index = available[Math.floor(Math.random() * available.length)];
-  usedColorIndices.push(index);
-
-  const h = Math.floor((360 / TOTAL_COLORS) * index); // 均匀分布在色相环
-  const s = 70; // 固定饱和度
-  const l = 55; // 固定亮度
+  const h = Math.floor(Math.random() * 360);
+  const s = 60 + Math.random() * 20; // 60~80% 饱和度
+  const l = 50 + Math.random() * 10; // 50~60% 亮度
   return `hsl(${h}, ${s}%, ${l}%)`;
 }
 
@@ -882,50 +875,17 @@ const doFlush = async () => {
 
 function getPreviewText() {
   return logMan.curItems
-    .map((item, index) => {
-      // 字段级过滤
-      const date = previewFilters.filterDate ? '' : item.date ?? '';
-      const time = previewFilters.filterSpecificTime ? '' : item.time ?? '';
-      const name = item.nickname ?? '';
-      const uin = previewFilters.filterAccount ? '' : item.IMUserId ?? '';
-      let content = item.message ?? '';
-
-      if (previewFilters.filterEmojis) {
-        content = content.replace(/<img.*?\/?>/g, '');
-      }
-
-      const prefix = `<${name}${uin ? `(${uin})` : ''}>:`;
-      const line = `${date ? date.replace(/-/g, '/') : ''} ${time} ${prefix} ${content}`.trim();
-
-      return {
-        line,
-        nickname: name,
-        date,
-        time,
-        IMUserId: uin,
-        is_comment: item.is_comment, // 只记录原始标记，后面统一过滤
-        index,
-      };
+    .filter(i => !(i as any).is_comment) // 可按需要过滤场外发言
+    .map((i, index) => {
+      const date = i.date ?? ''
+      const time = i.time ?? ''
+      const name = i.nickname ?? ''
+      const uin = i.IMUserId ?? ''
+      const content = i.message ?? ''
+      const prefix = `<${name}${uin ? `(${uin})` : ''}>:`
+      const line = `${date ? date.replace(/-/g, '/') : ''} ${time} ${prefix} ${content}`.trim()
+      return { line, nickname: name, date, time, IMUserId: uin, is_comment: i.is_comment, index }
     })
-    // 按行过滤场外发言
-    .filter(item => !previewFilters.filterOffTopic || !item.is_comment);
-}
-
-function getPreviewSimpleText() {
-  return logMan.curItems
-    .filter(item => !item.is_comment) // 如果仍需要过滤场外发言
-    .map(item => {
-      const nickname = item.nickname ?? '';
-      const message = item.message ?? '';
-      const line = `[${nickname}]:${message}`;
-
-      return {
-        line,        // 完整行文本
-        nickname,    // 昵称
-        message,     // 消息内容
-        index: item.index ?? 0
-      };
-    });
 }
 
 // 预览切换：保持你的逻辑
@@ -933,12 +893,15 @@ function previewClick(mode: 'preview' | 'bbs' | 'trg') {
   if (mode === 'preview') {
     isShowPreviewBBS.value = false
     isShowPreviewTRG.value = false
+    store.exportOptions.imageHide = false
   } else if (mode === 'bbs') {
     isShowPreview.value    = false
     isShowPreviewTRG.value = false
+    store.exportOptions.imageHide = true
   } else {
     isShowPreview.value    = false
     isShowPreviewBBS.value = false
+    store.exportOptions.imageHide = true
   }
   refreshCanvas()
 }
@@ -953,86 +916,79 @@ function exportRecordRaw() {
   exportFileRaw(text.value)
 }
 
-/**
- * 导出 Word 文档
- * @param store Vue store，必须包含 pcList 和 previewFilters
- */
-import { Document, Packer, Paragraph, TextRun } from 'docx'
-
-function hslToHex(h: number, s: number, l: number) {
-  s /= 100;
-  l /= 100;
-
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) =>
-    Math.round((l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))) * 255)
-      .toString(16)
-      .padStart(2, "0");
-
-  return `#${f(0)}${f(8)}${f(4)}`;
-}
-
-function exportPreviewToWord() {
-  const previewLines = getPreviewText() // 拿到过滤后的数组
-
-  const doc = new Document({
-    creator: "风铃Velinithra",
-    title: "记录导出",
-    sections: [] // 先传空数组或者直接 addSection 后再生成
-  });
-
-  const paragraphs: Paragraph[] = []
-
-  for (const item of previewLines) {
-
-    // 组装文本
-    const lineText = item.line
-
-    console.log(lineText)
-
-    // 根据 nickname 获取颜色
-    const pc = store.pcList.find((p: any) => p.name === item.nickname)
-    const style: any = {}
-    let colorHex: string | undefined = undefined;
-    if (pc?.color) {
-      if (pc.color.startsWith("hsl")) {
-        // 提取 h, s, l
-        const match = pc.color.match(/hsl\((\d+), ([\d.]+)%, ([\d.]+)%\)/);
-        if (match) {
-          const h = parseFloat(match[1]);
-          const s = parseFloat(match[2]);
-          const l = parseFloat(match[3]);
-          colorHex = hslToHex(h, s, l);
-        }
-      } else {
-        colorHex = pc.color; // 假设已经是 #xxxxxx
-      }
-    }
-
-    if (colorHex) style.color = colorHex;
-
-    // 生成段落
-    paragraphs.push(
-      new Paragraph({
-        children: [new TextRun({ text: lineText, ...style })],
-      })
-    )
+function exportRecordDOC() {
+  browserAlert()
+  if (isMobile.value) {
+    message.warning('你当前处于移动端环境，已知只有WPS能够查看生成的Word文件，且无法看图！使用PC打开可以查看图片。')
   }
 
-  doc.addSection({ children: paragraphs })
+  const solveImg = (el: Element) => {
+    if (el.tagName === 'IMG') {
+      let width = (el as HTMLElement).clientWidth
+      let height = (el as HTMLElement).clientHeight
+      if (width === 0) { width = 300; height = 300 }
+      el.setAttribute('width', `${width}`)
+      el.setAttribute('height', `${height}`)
+    }
+    for (let i = 0; i < el.children.length; i += 1) solveImg(el.children[i])
+  }
 
-  Packer.toBlob(doc).then((blob) => {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "record.docx"
-    a.click()
-    URL.revokeObjectURL(url)
-  })
+  const map = store.pcMap
+  const items: string[] = []
+
+  showPreview()
+
+  for (const i of previewItems.value) {
+    if ((i as any).isRaw) continue
+    const id = packNameId(i)
+    if (map.get(id)?.role === '隐藏') continue
+
+    const mount = document.createElement('span')
+    render(h(PreviewItem, { source: i }), mount)
+    solveImg(mount)
+    items.push(mount.innerHTML)
+    render(null, mount)
+  }
+
+  exportFileDoc(items.join('\n'))
 }
 
+function exportRecordTalkDOC() {
+  browserAlert()
+  if (isMobile.value) {
+    message.warning('你当前处于移动端环境，已知只有WPS能够查看生成的Word文件，且无法看图！使用PC打开可以查看图片。')
+  }
 
+  const solveImg = (el: Element) => {
+    if (el.tagName === 'IMG') {
+      let width = (el as HTMLElement).clientWidth
+      let height = (el as HTMLElement).clientHeight
+      if (width === 0) { width = 300; height = 300 }
+      el.setAttribute('width', `${width}`)
+      el.setAttribute('height', `${height}`)
+    }
+    for (let i = 0; i < el.children.length; i += 1) solveImg(el.children[i])
+  }
+
+  const map = store.pcMap
+  const rows: string[] = []
+
+  showPreview()
+
+  for (const i of previewItems.value) {
+    if ((i as any).isRaw) continue
+    const id = packNameId(i)
+    if (map.get(id)?.role === '隐藏') continue
+
+    const mount = document.createElement('span')
+    render(h(PreviewTableTR, { source: i }), mount)
+    solveImg(mount)
+    rows.push(mount.innerHTML)
+    render(null, mount)
+  }
+
+  exportFileDoc(`<table style="border-collapse: collapse;"><tbody>${rows.join('\n')}</tbody></table>`)
+}
 
 
 /* ====== 实用函数 ====== */

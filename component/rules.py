@@ -142,26 +142,36 @@ def set_great_sf_rule(rule:int, group:str)->int:
     ruledb.close()
     return 1    # Exec Succeed
 
-def get_great_sf_rule(group:str)->int:
+def get_great_sf_rule(group: str) -> int:
     '''
-    Ask rule # in given group.
-    Args:
-        group(str): QQ group id.
-    Returns:
-        int: rule id, -1 for group not exist.
+    获取群组规则，如果群组不存在则自动创建并返回默认规则。
     '''
-    # db connection
+    group_id_str = str(group)
     ruledb = sqlite3.connect(f"{PLUGIN_DIR}/../data/cocrule.db")
     csr = ruledb.cursor()
     
-    # search for existence
-    try: csr.execute(f"SELECT Rule FROM GroupRule WHERE GroupID = \"{group}\"")
-    except:
+    try:
+        # 使用参数化查询防止 SQL 注入
+        csr.execute("SELECT Rule FROM GroupRule WHERE GroupID = ?", (group_id_str,))
+        res = csr.fetchone()
+        
+        if res is not None:
+            # 1. 如果条目存在，直接返回
+            rule_id = int(res[0])
+        else:
+            # 2. 如果条目不存在，自动创建一个默认值为 2 的条目
+            rule_id = GREAT_SF_RULE_DEFAULT
+            csr.execute("INSERT INTO GroupRule (GroupID, Rule) VALUES (?, ?)", (group_id_str, rule_id))
+            ruledb.commit()
+            
+        return rule_id
+    except Exception as e:
+        # 打印一下错误以便调试，实际生产环境可以去掉
+        print(f"Database error: {e}")
+        return GREAT_SF_RULE_DEFAULT
+    finally:
+        # 确保无论如何都会关闭数据库连接
         ruledb.close()
-        return -1   # Selecting Failed
-    
-    res = csr.fetchone()[0]
-    return int(res)    # Exec Succeed
 
 
 def modify_coc_great_sf_rule_command(group_id, command: str = " "):

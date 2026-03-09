@@ -5,8 +5,9 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   server: {
-    // allowedHosts: ['.atritrpg.chat'],
+    allowedHosts: ['.velinithra.space'],
     proxy: {
+
       '/api': {
           changeOrigin: true,
           target: 'https://worker.firehomework.top/dice/api',
