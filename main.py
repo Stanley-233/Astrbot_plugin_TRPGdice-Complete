@@ -85,7 +85,7 @@ class DicePlugin(Star):
         )
 
     
-    # @filter.command("r")
+    @filter.command("r")
     async def handle_roll_dice(self, event: AstrMessageEvent, message: str = None, remark : str = None):
         """普通掷骰：改为直接调用 dice.handle_roll_dice，输出由 get_output 管理（无 fallback）"""
         
@@ -1191,7 +1191,7 @@ class DicePlugin(Star):
         await client.api.call_action("send_group_msg", **payloads)
 
         
-    # @filter.command("en")
+    @filter.command("en")
     async def pc_grow_up(self, event: AstrMessageEvent, skill_name: str, skill_value: str = None):
         """
         .en 技能成长判定
@@ -1244,7 +1244,7 @@ class DicePlugin(Star):
 
     # ========================================================= #
     # san check
-    # @filter.command("sc")
+    @filter.command("sc")
     async def pc_san_check(self, event: AstrMessageEvent, loss_formula: str):
         """理智检定"""
         user_id = event.get_sender_id()
@@ -1419,7 +1419,7 @@ class DicePlugin(Star):
             self.remove_by_name(player_name, group_id)
             yield event.plain_result(f"已删除角色{player_name}的先攻")
 
-    # @filter.command("ri")
+    @filter.command("ri")
     async def roll_initiative(self , event: AstrMessageEvent, expr: str = None):
 
         group_id = event.get_group_id()
